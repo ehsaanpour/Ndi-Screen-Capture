@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NDI Screen Capture</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .control-panel {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        button.stop {
+            background-color: #e74c3c;
+        }
+        button.stop:hover {
+            background-color: #c0392b;
+        }
+        .preview-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .preview {
+            max-width: 100%;
+            max-height: 500px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .status {
+            text-align: center;
+            font-size: 18px;
+            margin: 20px 0;
+        }
+        .frame-rate-control {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        input[type="range"] {
+            width: 200px;
+        }
+        .status-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-icon.on {
+            background-color: #2ecc71;
+        }
+        .status-icon.off {
+            background-color: #e74c3c;
+        }
+        .fps-value {
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+        }
+        .info-section {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>NDI Screen Capture</h1>
+            <p>Stream your tablet screen over NDI</p>
+        </header>
+
+        <div class="control-panel">
+            <button id="startBtn">Start Streaming</button>
+            <button id="stopBtn" class="stop" disabled>Stop Streaming</button>
+        </div>
+
+        <div class="status">
+            Status: <span class="status-icon off"></span><span id="statusText">Not streaming</span>
+        </div>
+
+        <div class="frame-rate-control">
+            <span>Frame Rate:</span>
+            <input type="range" id="fpsSlider" min="1" max="60" value="30">
+            <span class="fps-value" id="fpsValue">30 FPS</span>
+        </div>
+
+        <div class="preview-container">
+            <img id="previewImg" class="preview" src="/static/placeholder.png" alt="Screen Preview">
+        </div>
+
+        <div class="info-section">
+            <h3>How to use:</h3>
+            <ol>
+                <li>Click "Start Streaming" to begin sending your screen via NDI</li>
+                <li>Adjust the frame rate using the slider if needed</li>
+                <li>Your screen is now available as an NDI source named "Tablet Screen Capture"</li>
+                <li>Connect to this source from any NDI-compatible software or device</li>
+                <li>Click "Stop Streaming" when you're done</li>
+            </ol>
+            <p><strong>Note:</strong> Higher frame rates provide smoother video but require more processing power and network bandwidth.</p>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusText = document.getElementById('statusText');
+        const statusIcon = document.querySelector('.status-icon');
+        const fpsSlider = document.getElementById('fpsSlider');
+        const fpsValue = document.getElementById('fpsValue');
+        const previewImg = document.getElementById('previewImg');
+
+        // WebSocket for live preview
+        let ws = null;
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            updateStatus();
+            setupWebSocket();
+        });
+
+        // Set up the WebSocket connection
+        function setupWebSocket() {
+            // Close existing connection if any
+            if (ws) {
+                ws.close();
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connection established');
+            };
+            
+            ws.onmessage = (event) => {
+                // Update preview image with the received frame
+                previewImg.src = event.data;
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket connection closed');
+                // Attempt to reconnect after a delay
+                setTimeout(setupWebSocket, 2000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        // Update UI based on current status
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    const isCapturing = data.capturing;
+                    
+                    // Update UI elements
+                    startBtn.disabled = isCapturing;
+                    stopBtn.disabled = !isCapturing;
+                    statusText.textContent = isCapturing ? 'Streaming' : 'Not streaming';
+                    statusIcon.className = isCapturing ? 'status-icon on' : 'status-icon off';
+                    
+                    // Update FPS slider to match server value
+                    fpsSlider.value = data.frame_rate;
+                    fpsValue.textContent = `${data.frame_rate} FPS`;
+                })
+                .catch(error => {
+                    console.error('Error fetching status:', error);
+                });
+        }
+
+        // Start streaming
+        startBtn.addEventListener('click', () => {
+            fetch('/start', {
+                method: 'POST',
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Start response:', data);
+                    updateStatus();
+                })
+                .catch(error => {
+                    console.error('Error starting capture:', error);
+                });
+        });
+
+        // Stop streaming
+        stopBtn.addEventListener('click', () => {
+            fetch('/stop', {
+                method: 'POST',
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Stop response:', data);
+                    updateStatus();
+                })
+                .catch(error => {
+                    console.error('Error stopping capture:', error);
+                });
+        });
+
+        // Update frame rate
+        fpsSlider.addEventListener('input', () => {
+            const fps = parseInt(fpsSlider.value);
+            fpsValue.textContent = `${fps} FPS`;
+        });
+
+        fpsSlider.addEventListener('change', () => {
+            const fps = parseInt(fpsSlider.value);
+            
+            fetch('/set_frame_rate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(fps),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Frame rate update response:', data);
+                })
+                .catch(error => {
+                    console.error('Error updating frame rate:', error);
+                });
+        });
+
+        // Check status periodically
+        setInterval(updateStatus, 5000);
+    </script>
+</body>
+</html> 
