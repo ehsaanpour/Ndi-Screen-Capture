@@ -71,8 +71,8 @@ To view the stream on another device:
 - The application uses Python with FastAPI for the web server
 - Screen capture is handled by MSS and OpenCV
 - NDI communication uses the official NDI Python SDK
-- The web interface uses standard HTML, CSS, and JavaScript with WebSockets for the preview
+- The web interface uses standard HTML, CSS, and JavaScript with WebSockets for the preview.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
