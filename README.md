@@ -64,7 +64,7 @@ To view the stream on another device:
 
 - **NDI source not found**: Ensure both devices are on the same network and that the NDI SDK is properly installed
 - **Poor performance**: Try lowering the frame rate using the slider
-- **Application crashes**: Check that all dependencies are correctly installed
+- **Application crashes**: Check that all dependencies are correctly installed. 
 
 ## Technical Details
 
